@@ -8,6 +8,8 @@ en terskel du selv setter.
 
 ## Hva den gjør — og ikke gjør
 
+![Pluginen i drift: pris i linja, panel med bid/ask og terskler](preview.png)
+
 - ✅ Henter BTC/NOK-prisen fra Bare Bitcoins **offentlige** prisendepunkt:
   `GET https://api.bb.no/v1/price/nok` (ingen autentisering, se
   [API-dokumentasjonen](https://dev.barebitcoin.no/api/openapi))

@@ -110,8 +110,7 @@ BarWidget {
     id: button
     anchors.fill: parent
     bar: root.bar
-    icon: root.icon
-    text: root.priceText
+    text: (root.icon !== "" ? root.icon + " " : "") + root.priceText
     labelVisible: true
     tooltipText: {
       if (root.feedFailed) return "Bare Bitcoin: " + feed.error
