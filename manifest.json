@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.katla50.barebitcoin",
+  "name": "Bare Bitcoin Price",
+  "version": "1.0.0",
+  "author": "katla50",
+  "license": "MIT",
+  "description": "BTC price in NOK from Bare Bitcoin's public endpoint in the bar, with desktop alerts when the price crosses your own thresholds.",
+  "homepage": "https://github.com/katla50/barebitcoin-omarchy",
+  "repository": "https://github.com/katla50/barebitcoin-omarchy",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Bare Bitcoin Price",
+    "description": "BTC/NOK from Bare Bitcoin in the bar, with threshold alerts and a price detail panel",
+    "category": "Info",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "compact": false,
+      "showBidAsk": true,
+      "icon": "₿"
+    },
+    "schema": [
+      {
+        "key": "compact",
+        "type": "bool",
+        "label": "Compact price (718.8k) instead of the full amount"
+      },
+      {
+        "key": "showBidAsk",
+        "type": "bool",
+        "label": "Show bid/ask spread in the detail panel"
+      },
+      {
+        "key": "icon",
+        "type": "string",
+        "label": "Icon glyph shown next to the price; empty for none"
+      }
+    ]
+  }
+}
