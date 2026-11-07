@@ -45,10 +45,10 @@ Panel {
   readonly property var loc: Qt.locale()
   readonly property string configDir: Quickshell.env("HOME") + "/.config/barebitcoin-plugin"
 
-  // Threshold form state. Empty text means "that threshold is off".
-  property string upperText: ""
-  property string lowerText: ""
-  property string intervalText: ""
+  // Saved thresholds, mirrored from config.json. Only these are drawn as
+  // guide lines — unsaved text in the form must not move the chart.
+  property real savedUpper: NaN
+  property real savedLower: NaN
   property string saveStatus: ""
   property bool saveError: false
 
@@ -87,9 +87,12 @@ Panel {
 
   function saveThresholds() {
     if (saveProcess.running) return
-    var upper = digitsOnly(root.upperText)
-    var lower = digitsOnly(root.lowerText)
-    var interval = String(root.intervalText).replace(/[^0-9]/g, "")
+    // The fields are the source of truth while editing: reading them here
+    // (instead of mirrored properties) keeps a binding from rewriting the
+    // text under the cursor on every keystroke.
+    var upper = digitsOnly(upperField.text)
+    var lower = digitsOnly(lowerField.text)
+    var interval = String(intervalField.text).replace(/[^0-9]/g, "")
     if (interval === "") interval = "60"
 
     saveProcess.command = ["sh", Qt.resolvedUrl("save-config.sh").toString().replace("file://", ""),
@@ -105,16 +108,37 @@ Panel {
     } catch (e) {
       return
     }
-    root.upperText = doc.upper_threshold_nok === null || doc.upper_threshold_nok === undefined
+
+    var upper = doc.upper_threshold_nok === null || doc.upper_threshold_nok === undefined
       ? "" : String(doc.upper_threshold_nok)
-    root.lowerText = doc.lower_threshold_nok === null || doc.lower_threshold_nok === undefined
+    var lower = doc.lower_threshold_nok === null || doc.lower_threshold_nok === undefined
       ? "" : String(doc.lower_threshold_nok)
-    root.intervalText = doc.poll_interval_seconds === undefined
+    var interval = doc.poll_interval_seconds === undefined
       ? "60" : String(doc.poll_interval_seconds)
+
+    // Never clobber a field the user is typing in: the periodic config
+    // refresh lands mid-edit and used to wipe half-typed numbers.
+    if (!upperField.activeFocus) upperField.text = upper
+    if (!lowerField.activeFocus) lowerField.text = lower
+    if (!intervalField.activeFocus) intervalField.text = interval
+
+    root.savedUpper = upper === "" ? NaN : Number(upper)
+    root.savedLower = lower === "" ? NaN : Number(lower)
+    chart.requestPaint()
   }
 
   function pointsUsable(pts) {
     return pts !== null && pts !== undefined && pts.length > 1
+  }
+
+  // A guide line only exists for a saved threshold that is actually inside
+  // the chart's price range.
+  readonly property bool thresholdLineVisible: {
+    var s = root.chartStats
+    if (s === null) return false
+    var upper = !isNaN(root.savedUpper) && root.savedUpper >= s.min && root.savedUpper <= s.max
+    var lower = !isNaN(root.savedLower) && root.savedLower >= s.min && root.savedLower <= s.max
+    return upper || lower
   }
 
   // Min/max/change for the visible period, shared by the Canvas and the
@@ -420,6 +444,28 @@ Panel {
               ctx.arc(lastX - 2, lastY, 3, 0, Math.PI * 2)
               ctx.fillStyle = root.accent
               ctx.fill()
+
+              // Saved alert thresholds as orange guide lines. Only values that
+              // are actually saved in config.json get a line, and only when
+              // they fall inside the visible price range.
+              var thresholdColor = "#f7931e"
+              var lines = [
+                { value: root.savedUpper, label: "varsel over" },
+                { value: root.savedLower, label: "varsel under" }
+              ]
+              ctx.setLineDash([6, 4])
+              ctx.lineWidth = 1.5
+              for (var k = 0; k < lines.length; k++) {
+                var tv = lines[k].value
+                if (isNaN(tv) || tv < stats.min || tv > stats.max) continue
+                var ty = yAt(tv)
+                ctx.beginPath()
+                ctx.moveTo(0, ty)
+                ctx.lineTo(w, ty)
+                ctx.strokeStyle = thresholdColor
+                ctx.stroke()
+              }
+              ctx.setLineDash([])
             }
           }
 
@@ -463,6 +509,15 @@ Panel {
           font.pixelSize: Style.font.caption
         }
 
+        Text {
+          width: parent.width
+          visible: root.thresholdLineVisible
+          text: "Oransje stiplet linje = lagret prisvarsel"
+          color: "#f7931e"
+          font.family: root.bar ? root.bar.fontFamily : Style.font.family
+          font.pixelSize: Style.font.caption
+        }
+
         PanelSeparator {
           width: parent.width
           foreground: root.textColor
@@ -494,12 +549,11 @@ Panel {
             }
 
             TextField {
+              id: upperField
               width: parent.width
-              text: root.upperText
               placeholderText: "av"
               foreground: root.textColor
               accent: root.accent
-              onTextEdited: root.upperText = text
               onAccepted: root.saveThresholds()
             }
           }
@@ -516,12 +570,11 @@ Panel {
             }
 
             TextField {
+              id: lowerField
               width: parent.width
-              text: root.lowerText
               placeholderText: "av"
               foreground: root.textColor
               accent: root.accent
-              onTextEdited: root.lowerText = text
               onAccepted: root.saveThresholds()
             }
           }
@@ -543,12 +596,11 @@ Panel {
             }
 
             TextField {
+              id: intervalField
               width: parent.width
-              text: root.intervalText
               placeholderText: "60"
               foreground: root.textColor
               accent: root.accent
-              onTextEdited: root.intervalText = text
               onAccepted: root.saveThresholds()
             }
           }

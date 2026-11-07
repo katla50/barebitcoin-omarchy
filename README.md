@@ -16,6 +16,8 @@ prisen krysser en terskel du setter — direkte i panelet.
 - ✅ Viser prisen som et bar-widget (pill); klikk åpner et panel med
   nåpris, bid/ask og en prisgraf
 - ✅ Prisgraf med velbare perioder: **dag, uke, måned og år**
+- ✅ Lagrede prisvarsler tegnes som en **oransje stiplet linje** i grafen
+  (kun når terskelen er lagret og ligger innenfor valgt periodes prisnivå)
 - ✅ Setter øvre/nedre terskel og pollintervall **i panelet**, uten å
   redigere filer for hånd
 - ✅ Sender desktop-varsel (`notify-send`) når prisen krysser en terskel —
