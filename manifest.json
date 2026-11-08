@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.katla50.barebitcoin",
   "name": "Bare Bitcoin Price",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "author": "katla50",
   "license": "MIT",
   "description": "BTC price in NOK from Bare Bitcoin's public endpoint in the bar, with a day/week/month/year price chart and desktop alerts when the price crosses your thresholds.",

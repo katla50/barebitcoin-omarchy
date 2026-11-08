@@ -78,6 +78,7 @@ Panel {
 
   function pickPeriod(period) {
     root.chartPeriod = period
+    root.hoverIndex = -1
     if (root.feed !== null) root.feed.loadHistory(period, false)
   }
 
@@ -163,6 +164,69 @@ Panel {
     }
   }
 
+  // Padded price range and the pixel mapping, defined once so the Canvas
+  // paint and the hover marker cannot drift apart.
+  readonly property var chartRange: {
+    var s = root.chartStats
+    if (s === null) return null
+    var span = s.max - s.min
+    if (span <= 0) span = Math.max(1, s.max * 0.01)
+    var padY = span * 0.08
+    var lo = s.min - padY
+    var hi = s.max + padY
+    return { min: lo, max: hi, span: hi - lo }
+  }
+
+  function chartPointX(index) {
+    var n = root.chartPoints.length
+    if (n < 2) return 0
+    return (index / (n - 1)) * chart.width
+  }
+
+  function chartPointY(value) {
+    var r = root.chartRange
+    if (r === null || chart.height <= 0) return 0
+    return 6 + (chart.height - 12) * (1 - (value - r.min) / r.span)
+  }
+
+  // ---- Hover readout -----------------------------------------------------
+  property int hoverIndex: -1
+
+  function updateHover(mouseX) {
+    var n = root.chartPoints.length
+    if (n < 2 || chart.width <= 0) {
+      root.hoverIndex = -1
+      return
+    }
+    var i = Math.round((mouseX / chart.width) * (n - 1))
+    root.hoverIndex = Math.max(0, Math.min(n - 1, i))
+  }
+
+  // Norwegian month abbreviations, spelled out instead of relying on the
+  // shell process locale (which can be C/English and render "Jan").
+  readonly property var monthsShort: ["jan", "feb", "mar", "apr", "mai", "jun",
+                                      "jul", "aug", "sep", "okt", "nov", "des"]
+
+  function two(value) {
+    return value < 10 ? "0" + value : String(value)
+  }
+
+  function hoverLabel() {
+    if (root.hoverIndex < 0 || root.hoverIndex >= root.chartPoints.length) return ""
+    var point = root.chartPoints[root.hoverIndex]
+    var date = new Date(Number(point[0]))
+    var day = date.getDate() + ". " + root.monthsShort[date.getMonth()]
+    var time = root.two(date.getHours()) + ":" + root.two(date.getMinutes())
+    var label
+
+    if (root.chartPeriod === "day") label = time
+    else if (root.chartPeriod === "week") label = day + " " + time
+    else if (root.chartPeriod === "month") label = day
+    else label = root.monthsShort[date.getMonth()] + " " + date.getFullYear()
+
+    return label + " · " + root.money(Number(point[1]))
+  }
+
   Process {
     id: configProbe
     command: ["sh", "-c", "cat \"$HOME/.config/barebitcoin-plugin/config.json\" 2>/dev/null || true"]
@@ -219,6 +283,8 @@ Panel {
   onFeedChanged: {
     if (root.feed !== null) root.feed.loadHistory(root.chartPeriod, false)
   }
+
+  onHoverIndexChanged: chart.requestPaint()
 
   Connections {
     target: root.feed
@@ -393,16 +459,8 @@ Panel {
 
               var pts = root.chartPoints
               var stats = root.chartStats
-              if (!root.pointsUsable(pts) || stats === null) return
-
-              var min = stats.min
-              var max = stats.max
-              var span = max - min
-              if (span <= 0) span = Math.max(1, max * 0.01)
-              var padY = span * 0.08
-              min -= padY
-              max += padY
-              span = max - min
+              var range = root.chartRange
+              if (!root.pointsUsable(pts) || stats === null || range === null) return
 
               // Horizontal grid at 25/50/75 %.
               ctx.strokeStyle = Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.10)
@@ -415,8 +473,8 @@ Panel {
                 ctx.stroke()
               }
 
-              function xAt(i) { return (i / (pts.length - 1)) * w }
-              function yAt(v) { return pad + (h - 2 * pad) * (1 - (v - min) / span) }
+              function xAt(i) { return root.chartPointX(i) }
+              function yAt(v) { return root.chartPointY(v) }
 
               // Area fill under the line.
               ctx.beginPath()
@@ -466,6 +524,66 @@ Panel {
                 ctx.stroke()
               }
               ctx.setLineDash([])
+
+              // Hover marker: vertical guide and a dot on the nearest sample.
+              if (root.hoverIndex >= 0 && root.hoverIndex < pts.length) {
+                var hx = xAt(root.hoverIndex)
+                var hy = yAt(Number(pts[root.hoverIndex][1]))
+
+                ctx.strokeStyle = Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.35)
+                ctx.lineWidth = 1
+                ctx.setLineDash([3, 3])
+                ctx.beginPath()
+                ctx.moveTo(hx, 0)
+                ctx.lineTo(hx, h)
+                ctx.stroke()
+                ctx.setLineDash([])
+
+                ctx.beginPath()
+                ctx.arc(hx, hy, 4, 0, Math.PI * 2)
+                ctx.fillStyle = root.accent
+                ctx.fill()
+                ctx.strokeStyle = root.textColor
+                ctx.lineWidth = 1.5
+                ctx.stroke()
+              }
+            }
+          }
+
+          MouseArea {
+            id: chartMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            acceptedButtons: Qt.NoButton
+            cursorShape: Qt.CrossCursor
+            onPositionChanged: root.updateHover(mouseX)
+            onExited: root.hoverIndex = -1
+          }
+
+          // Readout follows the cursor, clamped so it never leaves the chart.
+          Rectangle {
+            id: hoverBubble
+            visible: root.hoverIndex >= 0
+            readonly property real anchorX: root.chartPointX(root.hoverIndex)
+            readonly property real anchorY: root.hoverIndex >= 0
+              ? root.chartPointY(Number(root.chartPoints[root.hoverIndex][1]))
+              : 0
+            width: hoverLabelText.implicitWidth + Style.space(10)
+            height: hoverLabelText.implicitHeight + Style.space(6)
+            x: Math.max(0, Math.min(parent.width - width, anchorX - width / 2))
+            y: Math.max(0, Math.min(parent.height - height, anchorY - height - Style.space(8)))
+            color: Color.popups.background
+            border.color: Color.popups.border
+            border.width: 1
+            radius: Style.cornerRadius
+
+            Text {
+              id: hoverLabelText
+              anchors.centerIn: parent
+              text: root.hoverLabel()
+              color: root.textColor
+              font.family: root.bar ? root.bar.fontFamily : Style.font.family
+              font.pixelSize: Style.font.caption
             }
           }
 
